@@ -1441,6 +1441,14 @@ html[data-theme-id] .chat-markdown .chat-markdown-codeblock-header {
   color: color-mix(in srgb, var(--code-foreground) 72%, transparent);
 }
 
+/* Wide display math scrolls instead of widening the message. */
+.chat-markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Room for tall glyphs (integrals, limits) that reach past KaTeX's line box. */
+  padding-block: 0.25em;
+}
+
 /* T3 Chat renders inline code and compact chat artifacts with its translucent
    secondary surface flattened over the light chat canvas. The raw muted and
    secondary tokens are substantially darker than those visible pixels. */

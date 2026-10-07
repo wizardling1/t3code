@@ -92,9 +92,16 @@ import { parseThreadLinkHref, THREAD_LINK_PROTOCOL } from "@t3tools/shared/threa
 import { AssistantCitationChip } from "./chat/AssistantCitationChip";
 import { MarkdownThreadLink } from "./chat/MarkdownThreadLink";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import type { Processor } from "unified";
 import { isWindowsAbsolutePath } from "@t3tools/shared/path";
 import { remarkGithubAlerts } from "../markdown-github-alerts";
+import {
+  hasMarkdownMath,
+  normalizeMarkdownMath,
+  remarkMathPresentation,
+  useMathRehypePlugins,
+} from "../markdown-math";
 import {
   artifactTemplateFromHastProperties,
   CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES,
@@ -527,7 +534,12 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   attributes: {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
-    code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
+    // remark-math marks math with `math-inline` / `math-display` beside `language-math`.
+    code: [
+      ["className", /^(?:language-.|math-(?:inline|display)$)/],
+      "dataCodeMeta",
+      "dataInlineCode",
+    ],
     blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataAlert"],
     div: [...(defaultSchema.attributes?.div ?? []), ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES],
     a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink"],
@@ -553,6 +565,8 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
 
 const CHAT_MARKDOWN_REMARK_PLUGINS = [
   remarkGfm,
+  remarkMath,
+  remarkMathPresentation,
   remarkKeepWindowsPathDestinations,
   remarkGithubAlerts,
   remarkNormalizeListItemIndentation,
@@ -563,6 +577,8 @@ const CHAT_MARKDOWN_REMARK_PLUGINS = [
 
 const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
   remarkGfm,
+  remarkMath,
+  remarkMathPresentation,
   remarkKeepWindowsPathDestinations,
   remarkGithubAlerts,
   remarkNormalizeListItemIndentation,
@@ -3592,6 +3608,15 @@ function ChatMarkdown({
     localMediaPreview,
     setLocalMediaPreview,
   } = useChatMarkdownState({ text, ...props });
+  const markdown = useMemo(() => normalizeMarkdownMath(text), [text]);
+  const mathRehypePlugins = useMathRehypePlugins(hasMarkdownMath(markdown));
+  const rehypePlugins = useMemo(() => {
+    if (!mathRehypePlugins) return parseRawHtml ? CHAT_MARKDOWN_REHYPE_PLUGINS : undefined;
+    // KaTeX output is trusted markup, so it renders after sanitizing.
+    return parseRawHtml
+      ? [...CHAT_MARKDOWN_REHYPE_PLUGINS, ...mathRehypePlugins]
+      : mathRehypePlugins;
+  }, [mathRehypePlugins, parseRawHtml]);
   const incrementalParsing =
     props.isStreaming === true &&
     extraRemarkPlugins.length === 0 &&
@@ -3622,12 +3647,12 @@ function ChatMarkdown({
       <ChatMarkdownRendererContext value={componentState}>
         <ReactMarkdown
           remarkPlugins={remarkPlugins}
-          rehypePlugins={parseRawHtml ? CHAT_MARKDOWN_REHYPE_PLUGINS : undefined}
+          rehypePlugins={rehypePlugins}
           skipHtml={false}
           components={CHAT_MARKDOWN_COMPONENTS}
           urlTransform={markdownUrlTransform}
         >
-          {text}
+          {markdown}
         </ReactMarkdown>
       </ChatMarkdownRendererContext>
       {localMediaPreview ? (

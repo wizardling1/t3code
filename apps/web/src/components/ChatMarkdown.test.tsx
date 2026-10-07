@@ -7,6 +7,8 @@ import { create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
+import { serializeRenderedMarkdownFragment } from "../markdown-clipboard";
+import { loadMathRehypePlugins } from "../markdown-math";
 import { GitHubIcon } from "./Icons";
 import { Button } from "./ui/button";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
@@ -1032,5 +1034,36 @@ describe("ChatMarkdown Windows file links", () => {
     expect(html).not.toContain("javascript:");
     expect(html).not.toContain("d:alert");
     expect(html).not.toContain("chat-markdown-file-link");
+  });
+});
+
+describe("ChatMarkdown math", () => {
+  const render = async (text: string) => {
+    await loadMathRehypePlugins();
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(<ChatMarkdown cwd="/tmp/project" text={text} />);
+    return container;
+  };
+
+  it("renders dollar and LaTeX delimiters with KaTeX", async () => {
+    const container = await render(
+      "Inline $x^2$ and \\(y_1\\).\n\n$$\n\\frac{a}{b}\n$$\n\n\\[ c^2 \\]",
+    );
+    expect(container.querySelectorAll(".katex:not(.katex-display .katex)")).toHaveLength(2);
+    expect(container.querySelectorAll(".katex-display")).toHaveLength(2);
+    expect(container.querySelector("code")).toBeNull();
+  });
+
+  it("keeps prices and shell variables as text", async () => {
+    const container = await render("It costs $5 and $10, see `$HOME` and $PATH.");
+    expect(container.querySelector(".katex")).toBeNull();
+    expect(container.textContent).toContain("It costs $5 and $10, see $HOME and $PATH.");
+  });
+
+  it("copies rendered math as its TeX source", async () => {
+    const container = await render("Area is $\\pi r^2$.\n\n$$\nE = mc^2\n$$");
+    expect(serializeRenderedMarkdownFragment(container.firstElementChild!)).toBe(
+      "Area is $\\pi r^2$.\n\n$$\nE = mc^2\n$$",
+    );
   });
 });
