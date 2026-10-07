@@ -25,6 +25,41 @@
             fi
             exec npx -y -p vite-plus@1.0.0 vp "$@"
           '';
+          # npm's Electron (pinned newer than nixpkgs') runs through nix-ld and needs
+          # these on its library path for `vp run dev:desktop`.
+          electronLibraryPath = pkgs.lib.makeLibraryPath (
+            with pkgs;
+            [
+              alsa-lib
+              at-spi2-atk
+              at-spi2-core
+              atk
+              cairo
+              cups
+              dbus
+              expat
+              glib
+              gtk3
+              libdrm
+              libgbm
+              libglvnd
+              libnotify
+              libsecret
+              libx11
+              libxcb
+              libxcomposite
+              libxdamage
+              libxext
+              libxfixes
+              libxkbcommon
+              libxrandr
+              nspr
+              nss
+              pango
+              systemd
+              wayland
+            ]
+          );
         in
         {
           default = pkgs.mkShell {
@@ -43,6 +78,9 @@
             # matching the devcontainer. Linked worktrees already default to their own .t3.
             shellHook = ''
               export T3CODE_HOME="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.t3"
+              # Load those libraries with their own glibc, not the (possibly older) system one.
+              export NIX_LD="$(cat ${pkgs.stdenv.cc}/nix-support/dynamic-linker)"
+              export NIX_LD_LIBRARY_PATH="${electronLibraryPath}''${NIX_LD_LIBRARY_PATH:+:$NIX_LD_LIBRARY_PATH}"
             '';
           };
         }
